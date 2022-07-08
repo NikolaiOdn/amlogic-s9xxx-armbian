@@ -103,7 +103,7 @@ on:
   #- cron: "0 17 * * 0"
 
 env:
-  TZ: America/New_York
+  TZ: Europe/Moscow
 
 jobs:
   build:
