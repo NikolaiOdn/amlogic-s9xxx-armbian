@@ -103,6 +103,7 @@ on:
   #- cron: "0 17 * * 0"
 
 env:
+  REPO_URL: https://github.com/NikolaiOdn/amlogic-s9xxx-armbian
   TZ: Europe/Moscow
 
 jobs:
@@ -197,7 +198,8 @@ jobs:
           armbian_sign: ${{ env.ARMBIAN_CUSTOM_NAME }}
 
       - name: Upload Armbian image to Release
-        uses: ncipollo/release-action@main
+        #uses: ncipollo/release-action@main
+        uses: NikolaiOdn/amlogic-s9xxx-armbian@main
         if: env.PACKAGED_STATUS == 'success' && !cancelled()
         with:
           tag: Armbian_Aml_${{ env.ARMBIAN_RELEASE }}_${{ env.ARMBIAN_DESKTOP_OPT }}_${{ env.PACKAGED_OUTPUTDATE }}
