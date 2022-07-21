@@ -46,6 +46,7 @@
 # software_115              : For heimdall:8003/8004(docker)
 # software_116              : For node-red:1880(docker)
 # software_117              : For mosquitto:1883/9001(docker)
+# software_118              : For openwrt(docker)
 #
 # software_201              : For desktop
 # software_202              : For firefox(desktop)
@@ -62,10 +63,14 @@
 # software_213              : For eog(desktop)
 # software_214              : For visual.studio.code(desktop)
 # software_215              : For gedit(desktop)
+# software_216              : For kvm(desktop)
+# software_217              : For flameshot(desktop)
 #
 # software_303              : For plex
 # software_304              : For emby-server
 # software_305              : For openmediavault(OMV-6.x)
+# software_306              : For nps
+# software_307              : For npc
 #
 # init_var                  : Initialize variables
 #
@@ -85,6 +90,14 @@ tv_path="/opt/tv"
 docker_puid="1000"
 docker_pgid="1000"
 docker_tz="Asia/Shanghai"
+#
+# Get current network status
+my_ifconfig="$(ifconfig -a 2>/dev/null | grep inet | grep -v 'inet6.*' | grep -v 'inet 172.*' | grep -v 'inet 127.*' | head -n1)"
+my_address="$(echo ${my_ifconfig} | awk '{print $2}')"
+my_netmask="$(echo ${my_ifconfig} | awk '{print $4}')"
+my_broadcast="$(echo ${my_ifconfig} | awk '{print $6}')"
+my_gateway="$(route -n 2>/dev/null | awk '($2~/^1/){print $2}' | head -n1)"
+my_macvlan="$(docker network ls 2>/dev/null | grep macvlan | awk '($2 == "macnet" && $3 == "macvlan"){print $2,$3}' | head -n1)"
 #
 # Set font color
 STEPS="[\033[95m STEPS \033[0m]"
@@ -212,7 +225,7 @@ software_101() {
     esac
 }
 
-# For portainer
+# For portainer(docker)
 software_102() {
     # Installation options
     echo -ne "${OPTIONS} Do you choose Chinese=(c) or English=(e) version of portainer? (c/e): "
@@ -256,7 +269,7 @@ software_102() {
     esac
 }
 
-# For yacht
+# For yacht(docker)
 software_103() {
     # Set basic information
     container_name="yacht"
@@ -294,7 +307,7 @@ software_103() {
     esac
 }
 
-# For transmission
+# For transmission(docker)
 software_104() {
     # Set basic information
     container_name="transmission"
@@ -354,7 +367,7 @@ software_104() {
     esac
 }
 
-# For qbittorrent
+# For qbittorrent(docker)
 software_105() {
     # Set basic information
     container_name="qbittorrent"
@@ -390,7 +403,7 @@ software_105() {
     esac
 }
 
-# For nextcloud
+# For nextcloud(docker)
 software_106() {
     # Set basic information
     container_name="nextcloud"
@@ -424,7 +437,7 @@ software_106() {
     esac
 }
 
-# For jellyfin
+# For jellyfin(docker)
 software_107() {
     # Set basic information
     container_name="jellyfin"
@@ -460,7 +473,7 @@ software_107() {
     esac
 }
 
-# For homeassistant
+# For homeassistant(docker)
 software_108() {
     # Set basic information
     container_name="homeassistant"
@@ -493,7 +506,7 @@ software_108() {
     esac
 }
 
-# For kodbox
+# For kodbox(docker)
 software_109() {
     # Set basic information
     container_name="kodbox"
@@ -525,7 +538,7 @@ software_109() {
     esac
 }
 
-# For couchpotato
+# For couchpotato(docker)
 software_110() {
     # Set basic information
     container_name="couchpotato"
@@ -558,7 +571,7 @@ software_110() {
     esac
 }
 
-# For sonarr
+# For sonarr(docker)
 software_111() {
     # Set basic information
     container_name="sonarr"
@@ -591,7 +604,7 @@ software_111() {
     esac
 }
 
-# For radarr
+# For radarr(docker)
 software_112() {
     # Set basic information
     container_name="radarr"
@@ -624,7 +637,7 @@ software_112() {
     esac
 }
 
-# For syncthing
+# For syncthing(docker)
 software_113() {
     # Set basic information
     container_name="syncthing"
@@ -661,7 +674,7 @@ software_113() {
     esac
 }
 
-# For filebrowser
+# For filebrowser(docker)
 software_114() {
     # Set basic information
     container_name="filebrowser"
@@ -695,7 +708,7 @@ software_114() {
     esac
 }
 
-# For heimdall
+# For heimdall(docker)
 software_115() {
     # Set basic information
     container_name="heimdall"
@@ -727,7 +740,7 @@ software_115() {
     esac
 }
 
-# For node-red
+# For node-red(docker)
 software_116() {
     # Set basic information
     container_name="node-red"
@@ -758,7 +771,7 @@ software_116() {
     esac
 }
 
-# For mosquitto
+# For mosquitto(docker)
 software_117() {
     # Set basic information
     container_name="mosquitto"
@@ -804,10 +817,67 @@ EOF
     esac
 }
 
+# For openwrt(docker)
+software_118() {
+    # Set basic information
+    container_name="openwrt"
+    image_name="ophub/openwrt-aarch64:latest"
+    install_path="${docker_path}/${container_name}"
+
+    echo -ne "${OPTIONS} Please input the docker image, the default is [ ${image_name} ]: "
+    read docker_img
+    [[ -n "${docker_img}" ]] && image_name="${docker_img}"
+
+    case "${software_manage}" in
+    install)
+        echo -e "${STEPS} Start installing the docker image: [ ${container_name} ]..."
+
+        # Create a virtual network: macvlan
+        [[ -z "${my_macvlan}" ]] && {
+            echo -ne "${OPTIONS} Add macvlan network, please input gateway, the default is [ ${my_gateway} ]: "
+            read gw
+            [[ -n "${gw}" ]] && my_gateway="${gw}"
+
+            my_subnet="${my_gateway%.*}.0"
+            docker network create -d macvlan --subnet=${my_subnet}/24 --gateway=${my_gateway} -o parent=eth0 macnet
+        }
+
+        # Instructions: https://hub.docker.com/r/ophub/openwrt-aarch64
+        docker run -d --name=${container_name} \
+            -e PUID=${docker_puid} \
+            -e PGID=${docker_pgid} \
+            -e TZ=${docker_tz} \
+            --network macnet \
+            --privileged \
+            --restart unless-stopped \
+            ${image_name}
+
+        sync && sleep 3
+        echo -e "${NOTE} The ${container_name} enter the OpenWrt system [ docker exec -it openwrt bash ]"
+        echo -e "${NOTE} The ${container_name} instructions [ https://hub.docker.com/r/ophub/openwrt-aarch64 ]"
+        echo -e "${SUCCESS} ${container_name} installed successfully."
+        exit 0
+        ;;
+    update) docker_update ;;
+    remove) docker_remove ;;
+    *) error_msg "Invalid input parameter: [ ${@} ]" ;;
+    esac
+}
+
 # For desktop
 software_201() {
     case "${software_manage}" in
     install)
+        # Add login desktop system user
+        echo -ne "${OPTIONS} Please input the login desktop system user(non-root): "
+        read get_desktop_user
+        if [[ -n "${get_desktop_user}" ]]; then
+            sudo adduser ${get_desktop_user}
+            sudo usermod -aG sudo ${get_desktop_user}
+        else
+            echo -e "${NOTE} You skipped adding the logged in desktop system user."
+        fi
+
         if [[ "${VERSION_CODEID}" == "ubuntu" ]]; then
             # Install ubuntu-desktop(gdm3) on Ubuntu (jammy/focal)
             software_install "ubuntu-desktop lightdm"
@@ -845,7 +915,7 @@ software_201() {
     esac
 }
 
-# For firefox
+# For firefox(desktop)
 software_202() {
     case "${software_manage}" in
     install)
@@ -870,7 +940,7 @@ software_202() {
     esac
 }
 
-# For vlc
+# For vlc(desktop)
 software_203() {
     case "${software_manage}" in
     install) software_install "vlc" ;;
@@ -880,7 +950,7 @@ software_203() {
     esac
 }
 
-# For mpv
+# For mpv(desktop)
 software_204() {
     case "${software_manage}" in
     install) software_install "mpv" ;;
@@ -890,7 +960,7 @@ software_204() {
     esac
 }
 
-# For gimp
+# For gimp(desktop)
 software_205() {
     case "${software_manage}" in
     install) software_install "gimp" ;;
@@ -900,7 +970,7 @@ software_205() {
     esac
 }
 
-# For krita
+# For krita(desktop)
 software_206() {
     case "${software_manage}" in
     install) software_install "krita" ;;
@@ -910,7 +980,7 @@ software_206() {
     esac
 }
 
-# For libreoffice
+# For libreoffice(desktop)
 software_207() {
     case "${software_manage}" in
     install) software_install "libreoffice libreoffice-l10n-zh-cn libreoffice-help-zh-cn" ;;
@@ -920,7 +990,7 @@ software_207() {
     esac
 }
 
-# For shotcut
+# For shotcut(desktop)
 software_208() {
     case "${software_manage}" in
     install) software_install "shotcut" ;;
@@ -930,7 +1000,7 @@ software_208() {
     esac
 }
 
-# For kdenlive
+# For kdenlive(desktop)
 software_209() {
     case "${software_manage}" in
     install) software_install "kdenlive" ;;
@@ -940,7 +1010,7 @@ software_209() {
     esac
 }
 
-# For thunderbird
+# For thunderbird(desktop)
 software_210() {
     case "${software_manage}" in
     install) software_install "thunderbird" ;;
@@ -950,7 +1020,7 @@ software_210() {
     esac
 }
 
-# For evolution
+# For evolution(desktop)
 software_211() {
     case "${software_manage}" in
     install) software_install "evolution" ;;
@@ -960,7 +1030,7 @@ software_211() {
     esac
 }
 
-# For gwenview
+# For gwenview(desktop)
 software_212() {
     case "${software_manage}" in
     install) software_install "gwenview" ;;
@@ -970,7 +1040,7 @@ software_212() {
     esac
 }
 
-# For eog
+# For eog(desktop)
 software_213() {
     case "${software_manage}" in
     install) software_install "eog" ;;
@@ -980,7 +1050,7 @@ software_213() {
     esac
 }
 
-# For visual.studio.code
+# For visual.studio.code(desktop)
 software_214() {
     case "${software_manage}" in
     install)
@@ -995,12 +1065,110 @@ software_214() {
     esac
 }
 
-# For gedit
+# For gedit(desktop)
 software_215() {
     case "${software_manage}" in
     install) software_install "gedit" ;;
     update) software_update ;;
     remove) software_remove "gedit" ;;
+    *) error_msg "Invalid input parameter: [ ${@} ]" ;;
+    esac
+}
+
+# For kvm(desktop)
+software_216() {
+    # kvm general settings
+    my_network_br0="/etc/network/interfaces.d/br0"
+    kvm_package_list="\
+        gconf2 qemu-system qemu-system-arm qemu-utils qemu-efi libvirt-daemon-system libvirt-clients bridge-utils \
+        virtinst virt-manager seabios vgabios gir1.2-spiceclientgtk-3.0 \
+        "
+
+    case "${software_manage}" in
+    install)
+        # Check the system operating environment
+        [[ -n "$(dpkg -l | grep -wE 'gdm3|sddm|lxdm|xdm|lightdm|slim|wdm|xfce')" ]] || error_msg "KVM requires a desktop environment, please install the desktop(Software ID: 201) first."
+
+        # Install KVM
+        echo -e "${STEPS} Start installing KVM and other related virtualization packages..."
+        software_install "${kvm_package_list}"
+
+        # Get desktop system login user
+        echo -ne "${OPTIONS} Please input the login desktop system user(non-root): "
+        read get_desktop_user
+        [[ -n "${get_desktop_user}" ]] && my_user="${get_desktop_user}" || my_user="${USER}"
+        # Add the login desktop system user to the kvm​ and libvirt user groups
+        echo -e "${STEPS} Start adding the current logged-in user(${my_user}) to the kvm and libvirt user groups..."
+        sudo usermod -aG kvm ${my_user}
+        sudo usermod -aG libvirt ${my_user}
+
+        # Enable and start the libvirtd.service daemon
+        echo -e "${STEPS} Start enabling and starting the libvirtd.service daemon..."
+        sudo systemctl daemon-reload
+        sudo systemctl enable --now libvirtd.service
+        sudo systemctl start libvirtd.service
+        #sudo systemctl status libvirtd.service
+
+        # Add network bridge settings template
+        echo -e "${STEPS} Start adding bridged network settings template..."
+        [[ -z "${my_address}" || -z "${my_broadcast}" || -z "${my_netmask}" || -z "${my_gateway}" ]] && {
+            echo -ne "${OPTIONS} Please input IP address, the default is [ ${my_address} ]: "
+            read get_address
+            [[ -n "${get_address}" ]] && my_address="${get_address}"
+
+            echo -ne "${OPTIONS} Please input broadcast, the default is [ ${my_broadcast} ]: "
+            read get_broadcast
+            [[ -n "${get_broadcast}" ]] && my_broadcast="${get_broadcast}"
+
+            echo -ne "${OPTIONS} Please input netmask, the default is [ ${my_netmask} ]: "
+            read get_netmask
+            [[ -n "${get_netmask}" ]] && my_netmask="${get_netmask}"
+
+            echo -ne "${OPTIONS} Please input gateway, the default is [ ${my_gateway} ]: "
+            read get_gateway
+            [[ -n "${get_gateway}" ]] && my_gateway="${get_gateway}"
+        }
+        sudo rm -f ${my_network_br0} 2>/dev/null
+        sudo cat >${my_network_br0} <<EOF
+# eth0 setup
+allow-hotplug eth0
+iface eth0 inet manual
+        pre-up ifconfig \$IFACE up
+        pre-down ifconfig \$IFACE down
+
+# Bridge setup: Please modify the [ address, broadcast, netmask, gateway and dns-nameservers ] to your own network
+auto br0
+iface br0 inet static
+        bridge_ports eth0
+        bridge_stp off
+        bridge_waitport 0
+        bridge_fd 0
+        address ${my_address}
+        broadcast ${my_broadcast}
+        netmask ${my_netmask}
+        gateway ${my_gateway}
+        dns-nameservers ${my_gateway}
+EOF
+
+        sync && sleep 3
+        echo -e "${NOTE} The bridge network settings: [ ${my_network_br0} ]"
+        echo -e "${SUCCESS} The KVM installation is successful."
+        ;;
+    update) software_update ;;
+    remove)
+        software_remove "${kvm_package_list}"
+        sudo rm -f ${my_network_br0} 2>/dev/null
+        ;;
+    *) error_msg "Invalid input parameter: [ ${@} ]" ;;
+    esac
+}
+
+# For flameshot(desktop)
+software_217() {
+    case "${software_manage}" in
+    install) software_install "flameshot" ;;
+    update) software_update ;;
+    remove) software_remove "flameshot" ;;
     *) error_msg "Invalid input parameter: [ ${@} ]" ;;
     esac
 }
@@ -1034,8 +1202,8 @@ software_303() {
         # Enable Plex server to start automatically on system boot
         echo -e "${STEPS} Start setting up the Plex server to start automatically at system boot..."
         sudo systemctl daemon-reload
+        sudo systemctl enable --now plexmediaserver.service
         sudo systemctl start plexmediaserver.service
-        sudo systemctl enable plexmediaserver.service
 
         # Confirm the service is enabled
         echo -e "${STEPS} Confirm the service is enabled..."
@@ -1080,8 +1248,8 @@ software_304() {
         # Enable Emby Server to start automatically on system boot
         echo -e "${STEPS} Start setting up the Emby Server to start automatically at system boot..."
         sudo systemctl daemon-reload
+        sudo systemctl enable --now emby-server.service
         sudo systemctl start emby-server.service
-        sudo systemctl enable emby-server.service
 
         # Confirm the service is enabled
         echo -e "${STEPS} Confirm the service is enabled..."
@@ -1103,13 +1271,11 @@ software_305() {
     case "${software_manage}" in
     install)
         echo -e "${STEPS} Start checking the installation environment..."
-        # Check script permission
-        [[ "$(id -u)" == "0" ]] || error_msg "please run this script as root: [ sudo ${0} -s 104 -m install ]"
         # Check systemd running status
         systemd="$(ps --no-headers -o comm 1)"
         [[ "${systemd}" == "systemd" ]] || error_msg "This system is not running systemd."
         # Check the system operating environment
-        [[ -z "$(dpkg -l | grep -wE 'gdm3|sddm|lxdm|xdm|lightdm|slim|wdm')" ]] || error_msg "OpenMediaVault does not support running in desktop environment!"
+        [[ -z "$(dpkg -l | grep -wE 'gdm3|sddm|lxdm|xdm|lightdm|slim|wdm|xfce')" ]] || error_msg "OpenMediaVault does not support running in desktop environment!"
 
         # Download software, E.g: /tmp/tmp.xxx/install
         tmp_download="$(mktemp -d)"
@@ -1134,6 +1300,99 @@ software_305() {
         ;;
     update) software_update ;;
     remove) software_remove "openmediavault" ;;
+    *) error_msg "Invalid input parameter: [ ${@} ]" ;;
+    esac
+}
+
+# For nps
+software_306() {
+    case "${software_manage}" in
+    install)
+        # Software version query api
+        software_api="https://api.github.com/repos/ehang-io/nps/releases"
+        # Check the latest version, E.g: v0.26.10
+        software_latest_version="$(curl -s "${software_api}" | grep "tag_name" | awk -F '"' '{print $4}' | tr " " "\n" | sort -rV | head -n 1)"
+        # Query download address, E.g: https://github.com/ehang-io/nps/releases/download/v0.26.10/linux_arm64_server.tar.gz
+        software_url="$(curl -s "${software_api}" | grep -oE "https:.*/${software_latest_version}/linux_arm64_server.tar.gz")"
+        [[ -n "${software_url}" ]] || error_msg "The download address is empty!"
+        echo -e "${INFO} Software download from: [ ${software_url} ]"
+
+        # Download software, E.g: /tmp/tmp.xxx/linux_arm64_server.tar.gz
+        tmp_download="$(mktemp -d)"
+        software_filename="${software_url##*/}"
+        echo -e "${STEPS} Start downloading NPS..."
+        wget -q -P ${tmp_download} ${software_url}
+        [[ "${?}" -eq "0" && -s "${tmp_download}/${software_filename}" ]] || error_msg "Software download failed!"
+        echo -e "${INFO} Software downloaded successfully: $(ls ${tmp_download} -l)"
+
+        # Installing and start NPS
+        echo -e "${STEPS} Start the installation and start NPS..."
+        cd ${tmp_download} && tar -xf ${software_filename}
+        sudo ./nps install
+        sudo nps start
+
+        sync && sleep 3
+        echo -e "${NOTE} The NPS address: [ http://ip:8080 ]"
+        echo -e "${NOTE} The NPS account: [ username:admin  /  password:123 ]"
+        echo -e "${NOTE} The NPS Instructions for Use: [ https://ehang-io.github.io/nps ]"
+        echo -e "${SUCCESS} The NPS installation is successful."
+        ;;
+    update)
+        sudo nps stop && sudo nps-update update && sudo nps restart
+        echo -e "${SUCCESS} The NPS update and restart successfully."
+        ;;
+    remove)
+        sudo nps stop && sudo nps uninstall
+        sudo rm -rf /etc/nps /root/conf/nps.conf /usr/local/bin/nps /usr/local/bin/nps-update /usr/bin/nps /usr/bin/nps-update 2>/dev/null
+        echo -e "${SUCCESS} The NPS remove successfully."
+        ;;
+    *) error_msg "Invalid input parameter: [ ${@} ]" ;;
+    esac
+}
+
+# For npc
+software_307() {
+    case "${software_manage}" in
+    install)
+        # Software version query api
+        software_api="https://api.github.com/repos/ehang-io/nps/releases"
+        # Check the latest version, E.g: v0.26.10
+        software_latest_version="$(curl -s "${software_api}" | grep "tag_name" | awk -F '"' '{print $4}' | tr " " "\n" | sort -rV | head -n 1)"
+        # Query download address, E.g: https://github.com/ehang-io/nps/releases/download/v0.26.10/linux_arm64_client.tar.gz
+        software_url="$(curl -s "${software_api}" | grep -oE "https:.*/${software_latest_version}/linux_arm64_client.tar.gz")"
+        [[ -n "${software_url}" ]] || error_msg "The download address is empty!"
+        echo -e "${INFO} Software download from: [ ${software_url} ]"
+
+        # Download software, E.g: /tmp/tmp.xxx/linux_arm64_client.tar.gz
+        tmp_download="$(mktemp -d)"
+        software_filename="${software_url##*/}"
+        echo -e "${STEPS} Start downloading NPC..."
+        wget -q -P ${tmp_download} ${software_url}
+        [[ "${?}" -eq "0" && -s "${tmp_download}/${software_filename}" ]] || error_msg "Software download failed!"
+        echo -e "${INFO} Software downloaded successfully: $(ls ${tmp_download} -l)"
+
+        # Installing and start NPC
+        echo -e "${STEPS} Start the installation and start NPC..."
+        cd ${tmp_download} && tar -xf ${software_filename}
+        sudo mkdir -p /etc/npc && sudo cp -rf conf /etc/npc
+        sudo ./npc install
+        sudo npc start
+
+        sync && sleep 3
+        echo -e "${NOTE} The NPS config file path: [ /etc/npc/conf/npc.conf ]"
+        echo -e "${NOTE} The NPS enable config command: [ sudo npc -config=/etc/npc/conf/npc.conf ]"
+        echo -e "${NOTE} The NPC Instructions for Use: [ https://ehang-io.github.io/nps ]"
+        echo -e "${SUCCESS} The NPC installation is successful."
+        ;;
+    update)
+        sudo npc stop && sudo npc-update update && sudo npc restart
+        echo -e "${SUCCESS} The NPC update and restart successfully."
+        ;;
+    remove)
+        sudo npc stop && sudo npc uninstall
+        sudo rm -rf /etc/npc /root/conf/npc.conf /usr/local/bin/npc /usr/local/bin/npc-update /usr/bin/npc /usr/bin/npc-update 2>/dev/null
+        echo -e "${SUCCESS} The NPC remove successfully."
+        ;;
     *) error_msg "Invalid input parameter: [ ${@} ]" ;;
     esac
 }
